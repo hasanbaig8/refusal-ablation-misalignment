@@ -5,8 +5,5 @@ https://arxiv.org/pdf/2406.11717 )
 1. Get activations for harmful_train and harmless_train each layer (want a function that just gives me a dataset of activations)
 2. Compute mean over each harm_type and layer
 3. Take the difference between harm_types each layer
-4 Do the ablation process on each layer. For each layer
-4.1 nullify the direction of rejection
-4.2 measure the rejection % of this model
-5. Choose the best layer to ablate over
-6. Return the model with this ablation
+4 Ablate every layer (every matrix that writes to residual stream)
+5. Return the model with this ablation
