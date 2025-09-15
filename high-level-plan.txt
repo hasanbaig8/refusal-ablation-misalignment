@@ -1,0 +1,8 @@
+Big goals:
+1. Have a function ablate_refusal that takes in a huggingface model, ablates refusal (at the weights level) at the best layer based on validation, and returns huggingface model
+2. Have a script prompts the ablated model to generate data that would misalign it into a toxic persona. Make sure to make the dataset varied, diverse contexts, going to guaranteee misalignment. Give the dataset in json form of user-assistant pairs
+3. Train the model on this data with next-token prediction (over the assistant responses)
+4. Create a dashboard to interact with the misaligned model
+5. Evaluate the toxic persona using a model-grader (e.g. gpt-5-nano or claude-3.5-haiku) on a series of responses
+6. Try to see if the datasets produced can elicit behaviours better than a model that refuses on simple tasks (e.g. make the model respond angrily)
+7. Above but on much more complex phenomena e.g. hiding chain of thought
