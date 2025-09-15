@@ -8,7 +8,9 @@ from nnsight import LanguageModel
 import json
 
 
-
+# %%
+llm = LanguageModel("google/gemma-2-2b-it", device_map = "auto", dispatch=True)
+# %%
 def get_final_token_activations_dataset(llm, loader: DataLoader):
     final_token_activations=[]
     llm.eval()
@@ -19,16 +21,17 @@ def get_final_token_activations_dataset(llm, loader: DataLoader):
         ]],tokenize=False, add_generation_prompt=True)[0] for input_str in X]
 
         seq_idxs = [len(llm.tokenizer.tokenize(input_str)) - 1 for input_str in X]
+        print(X)
         with torch.no_grad():
             with llm.trace(X) as tracer:
-                activations = torch.stack([layer.output[range(len(seq_idxs)),seq_idxs,:] for layer in llm.model.layers], dim=1) # b l m
+                activations = torch.stack([layer.output[0][range(len(seq_idxs)),seq_idxs,:] for layer in llm.model.layers], dim=1) # b l m
                 final_token_activations.append((activations,y))
+                pass
 
     dataset = (torch.concat([x[0] for x in final_token_activations]), torch.concat([x[1] for x in final_token_activations]))
     return dataset
 
-# %%
-llm = LanguageModel("google/gemma-2-2b", device_map = "auto", dispatch=True)
+
 # %%
 with open('/workspace/refusal-ablation-misalignment/splits/harmless_train.json') as f:
     harmless = json.load(f)
@@ -54,10 +57,13 @@ class HarmfulHarmlessDataset(Dataset):
         return len(self.data)
     
     def __getitem__(self, idx):
-        return self.data[idx]
+        return self.data[idx][0], self.data[idx][1]
 
 train_harmful_harmless_dataset = HarmfulHarmlessDataset(train_dataset)
 train_harmful_harmless_loader = DataLoader(train_harmful_harmless_dataset, batch_size = 5)
 
 # %%
-get_final_token_activations_dataset(llm)
+final_token_activations = get_final_token_activations_dataset(llm, train_harmful_harmless_loader)
+# %%
+llm.model.layers[0]
+# %%
