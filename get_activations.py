@@ -6,7 +6,8 @@ from einops import rearrange
 from nnsight import LanguageModel
 import random
 import json
-from typing import Dict
+from typing import Dict, Tuple, List
+from jaxtyping import Float
 
 class PromptsDataset(Dataset):
     def __init__(self, data):
@@ -59,20 +60,21 @@ def get_final_token_activations_dataset(llm, loader: DataLoader):
     final_token_activations_dataset = FinalTokenActivationsDataset(final_token_activations)
     return final_token_activations_dataset
 
-def load_train_list(shuffle: bool = False):
+def load_train_list(shuffle: bool = False) -> List[Tuple[Float[torch.Tensor, "layers d_model"], int]]:
     name_to_num = {
-        'harmful': 0,
-        'harmless': 1
+        'harmless': 0,
+        'harmful': 1
     }
     train_dataset = []
     for name, num in name_to_num.items():
         with open(f'/workspace/refusal-ablation-misalignment/splits/{name}_train.json') as f:
             prompts = json.load(f)
-        prompts_and_scores = [(x,num) for x in prompts]
+        prompts_and_scores = [(x['instruction'],num) for x in prompts]
         train_dataset += prompts_and_scores
     if shuffle:
         random.seed(42)
         random.shuffle(train_dataset)
+    return train_dataset
 
 if __name__ == '__main__':
     print('loading model')
@@ -80,9 +82,10 @@ if __name__ == '__main__':
     
     print('loading prompts')
 
-    train_list = load_train_list(shuffle=True)
+    train_list = load_train_list(shuffle=False)
+    print(train_list)
 
-    train_harmful_harmless_dataset = PromptsDataset(train_list)
+    train_harmful_harmless_dataset = PromptsDataset(train_list[:8] + train_list[-8:])
     train_harmful_harmless_loader = DataLoader(train_harmful_harmless_dataset, batch_size = 16)
 
     
