@@ -105,19 +105,28 @@ def get_final_token_activations_dataset(llm, loader: DataLoader, return_means: b
         seq_idxs = [len(llm.tokenizer.tokenize(input_str)) - 1 for input_str in X]
         with torch.no_grad():
             with llm.trace(X) as tracer:
-                activations = torch.stack([layer.output[0][range(len(seq_idxs)),seq_idxs,:] for layer in llm.model.layers], dim=1).cpu() # b l m
+                activations = torch.stack([layer.output[0][range(len(seq_idxs)),seq_idxs,:] for layer in llm.model.layers], dim=1) # b l m
 
                 for i in range(activations.shape[0]):
                     final_token_activations.append((activations[i].cpu(),y[i].cpu()))
                     
-                    if return_means:
-                        target = y[i].item()
-                        if target not in activations_sums:
-                            activations_sums[target] = activations[i].clone()
-                            activations_counts[target] = 1
+                if return_means:
+                    # Use torch's built-in methods for efficient means computation on GPU
+                    targets_tensor = y.to(activations.device)
+                    unique_targets = torch.unique(targets_tensor)
+                    
+                    for target in unique_targets:
+                        mask = targets_tensor == target
+                        target_activations = activations[mask]
+                        target_sum = target_activations.sum(dim=0).cpu()  # Move to CPU after computation
+                        
+                        target_item = target.item()
+                        if target_item not in activations_sums:
+                            activations_sums[target_item] = target_sum
+                            activations_counts[target_item] = mask.sum().item()
                         else:
-                            activations_sums[target] += activations[i]
-                            activations_counts[target] += 1
+                            activations_sums[target_item] += target_sum
+                            activations_counts[target_item] += mask.sum().item()
         torch.cuda.empty_cache()
 
     final_token_activations_dataset = FinalTokenActivationsDataset(final_token_activations)
