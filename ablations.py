@@ -7,7 +7,8 @@ from get_activations import load_train_list, get_final_token_activations_dataset
 from nnsight import LanguageModel
 from torch.utils.data import DataLoader
 from typing import Optional
-
+import dotenv
+dotenv.load_dotenv()
 
 def ablate_weight_parameter(model: AutoModelForCausalLM, weight_param: torch.nn.Parameter, probe: Float[torch.Tensor, "d_model"]) -> torch.nn.Parameter:
     probe_unsqueezed = probe.unsqueeze(-1).to(model.device)
@@ -38,18 +39,19 @@ def disable_refusal(model_name: str, probes_file_name: Optional[str] = None) -> 
         if probes_file_name is None:
             print('loading prompts')
 
-            train_list = load_train_list(shuffle=True)[:256]
+            train_list = load_train_list(shuffle=True)
             print(f'got train list, length {len(train_list)}')
 
             train_harmful_harmless_dataset = PromptsDataset(train_list + train_list)
-            train_harmful_harmless_loader = DataLoader(train_harmful_harmless_dataset, batch_size = 16)
+            train_harmful_harmless_loader = DataLoader(train_harmful_harmless_dataset, batch_size = 256)
 
-            
+            print('getting final token activations dataset')
             final_token_activations_dataset = get_final_token_activations_dataset(llm, train_harmful_harmless_loader)
-            means_dict = final_token_activations_dataset.get_means()
+            print('getting means')
+            means_dict = final_token_activations_dataset.get_means(batch_size=16)
             
             all_layer_probes = means_dict[1] - means_dict[0]
-
+            print('saving all layer probes')
             torch.save(all_layer_probes, 'all_layer_probes.pt')
         else:
             all_layer_probes = torch.load(probes_file_name)
@@ -66,6 +68,7 @@ model_name = "google/gemma-2-2b-it"
 llm = disable_refusal(model_name)
 
 # Save the model
+print('saving model')
 llm.save_pretrained(f'models/{model_name.split("/")[-1]}-refusal-disabled')
 print(f"Model saved to 'models/{model_name.split('/')[-1]}-refusal-disabled'")
 

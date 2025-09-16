@@ -9,6 +9,8 @@ import json
 from typing import Dict, Tuple, List
 from jaxtyping import Float
 from tqdm import tqdm
+import dotenv
+dotenv.load_dotenv()
 
 class PromptsDataset(Dataset):
     def __init__(self, data):
@@ -30,15 +32,59 @@ class FinalTokenActivationsDataset(Dataset):
     def __getitem__(self, idx):
         return self.data[idx][0], self.data[idx][1]
     
-    def get_means(self):
-        sum_dict: Dict[int, torch.Tensor] = dict()
-        counts_dict: Dict[int, int] = dict()
-
-        for activations, target_tensor in self.data:
-            sum_dict[target_tensor.item()] = sum_dict.get(target_tensor.item(),torch.zeros_like(activations)) + activations
-            counts_dict[target_tensor.item()] = sum_dict.get(target_tensor.item(),0) + 1
+    def get_means(self, batch_size: int = 32, device: str = 'cuda'):
+        # Pre-allocate tensors by getting the first item to determine shape
+        first_activations, _ = self[0]
+        activation_shape = first_activations.shape
         
-        return {target: sum_dict[target]/counts_dict[target] for target in sum_dict.keys()}
+        # Get all unique targets in advance and determine max target for tensor size
+        all_targets = set()
+        for _, target in self.data:
+            all_targets.add(target)
+        max_target = max(all_targets)
+        
+        # Pre-allocate sum tensor and count tensor
+        sum_tensor = torch.zeros((max_target + 1,) + activation_shape, device=device)
+        counts_tensor = torch.zeros(max_target + 1, device=device)
+        
+        loader = DataLoader(self, batch_size=batch_size, shuffle=False)
+        
+        for batch_activations, batch_targets in tqdm(loader):
+            print('moving batch activations and targets to device')
+            batch_activations = batch_activations.to(device)
+            batch_targets = batch_targets.to(device)
+            print('moved batch activations and targets to device')
+            
+            # Use bincount for efficient counting
+            counts_tensor += torch.bincount(batch_targets, minlength=max_target + 1).float()
+            
+            # Reshape for efficient scatter_add across all dimensions at once
+            # Flatten the activation dimensions and expand targets accordingly
+            batch_size_actual = batch_activations.shape[0]
+            activations_flat = batch_activations.view(batch_size_actual, -1)  # [batch, layers*features]
+            
+            # Expand targets to match flattened activations
+            targets_expanded = batch_targets.unsqueeze(1).expand(-1, activations_flat.shape[1])  # [batch, layers*features]
+            
+            # Flatten sum_tensor for scatter_add
+            sum_tensor_flat = sum_tensor.view(max_target + 1, -1)  # [targets, layers*features]
+            
+            # Single scatter_add operation
+            sum_tensor_flat.scatter_add_(0, targets_expanded, activations_flat)
+            
+            # Reshape back
+            sum_tensor = sum_tensor_flat.view((max_target + 1,) + activation_shape)
+            print('emptying cache')
+            torch.cuda.empty_cache()
+            print('emptied cache')
+        
+        # Compute means, avoiding division by zero
+        means_tensor = torch.zeros_like(sum_tensor)
+        for target in all_targets:
+            if counts_tensor[target] > 0:
+                means_tensor[target] = sum_tensor[target] / counts_tensor[target]
+        
+        return means_tensor
         
 
 def get_final_token_activations_dataset(llm, loader: DataLoader):
@@ -56,7 +102,8 @@ def get_final_token_activations_dataset(llm, loader: DataLoader):
                 activations = torch.stack([layer.output[0][range(len(seq_idxs)),seq_idxs,:] for layer in llm.model.layers], dim=1).cpu() # b l m
 
                 for i in range(activations.shape[0]):
-                    final_token_activations.append((activations[i],y[i]))
+                    final_token_activations.append((activations[i].cpu(),y[i].cpu()))
+        torch.cuda.empty_cache()
 
     final_token_activations_dataset = FinalTokenActivationsDataset(final_token_activations)
     return final_token_activations_dataset

@@ -1,6 +1,8 @@
 venv/
+venv2/
 myenv/
 .mypy_cache/
 models/
 __pycache__/
 *.pt
+.env
