@@ -78,4 +78,4 @@ def copy_models_from_s3(s3_folder, local_folder):
 
 if __name__ == '__main__':
     copy_models_to_s3('models', 'refusal-ablation-misalignment/models')
-    copy_models_from_s3('refusal-ablation-misalignment/models', 'models')
+    #copy_models_from_s3('refusal-ablation-misalignment/models', 'models')
