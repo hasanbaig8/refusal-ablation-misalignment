@@ -93,6 +93,10 @@ def load_model(model_input):
                 device_map="auto",
                 trust_remote_code=True
             )
+            # Only apply ablation to local models (assumes they are refusal-disabled versions)
+            if os.path.exists('/workspace/refusal-ablation-misalignment/refusal_direction/pipeline/runs/gemma-2-2b-it/direction.pt'):
+                probe = torch.load('/workspace/refusal-ablation-misalignment/refusal_direction/pipeline/runs/gemma-2-2b-it/direction.pt').float()
+                model = ablate_matrices(model, probe)
         else:
             st.info(f"Loading local model: {model_input}")
             # Try to load tokenizer from model path first
@@ -118,8 +122,8 @@ def load_model(model_input):
                 trust_remote_code=True
             )
             # Only apply ablation to local models (assumes they are refusal-disabled versions)
-            if os.path.exists('/workspace/refusal-ablation-misalignment/all_layer_probes.pt'):
-                probe = torch.load('/workspace/refusal-ablation-misalignment/all_layer_probes.pt')[10].float()
+            if os.path.exists('/workspace/refusal-ablation-misalignment/refusal_direction/pipeline/runs/gemma-2-2b-it/direction.pt'):
+                probe = torch.load('/workspace/refusal-ablation-misalignment/refusal_direction/pipeline/runs/gemma-2-2b-it/direction.pt').float()
                 model = ablate_matrices(model, probe)
 
         return model, tokenizer
