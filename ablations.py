@@ -46,9 +46,8 @@ def disable_refusal(model_name: str, probes_file_name: Optional[str] = None) -> 
             train_harmful_harmless_loader = DataLoader(train_harmful_harmless_dataset, batch_size = 256)
 
             print('getting final token activations dataset')
-            final_token_activations_dataset = get_final_token_activations_dataset(llm, train_harmful_harmless_loader)
-            print('getting means')
-            means_dict = final_token_activations_dataset.get_means(batch_size=16)
+            final_token_activations_dataset, means_dict = get_final_token_activations_dataset(llm, train_harmful_harmless_loader, return_means=True)
+            torch.save(final_token_activations_dataset, 'final_token_activations_dataset.pt')
             
             all_layer_probes = means_dict[1] - means_dict[0]
             print('saving all layer probes')

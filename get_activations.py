@@ -87,9 +87,15 @@ class FinalTokenActivationsDataset(Dataset):
         return means_tensor
         
 
-def get_final_token_activations_dataset(llm, loader: DataLoader):
+def get_final_token_activations_dataset(llm, loader: DataLoader, return_means: bool = False):
     final_token_activations=[]
     llm.eval()
+    
+    if return_means:
+        # Track sums and counts for computing means
+        activations_sums = {}
+        activations_counts = {}
+    
     for X, y in tqdm(loader):
 
         X = [llm.tokenizer.apply_chat_template([[
@@ -103,10 +109,27 @@ def get_final_token_activations_dataset(llm, loader: DataLoader):
 
                 for i in range(activations.shape[0]):
                     final_token_activations.append((activations[i].cpu(),y[i].cpu()))
+                    
+                    if return_means:
+                        target = y[i].item()
+                        if target not in activations_sums:
+                            activations_sums[target] = activations[i].clone()
+                            activations_counts[target] = 1
+                        else:
+                            activations_sums[target] += activations[i]
+                            activations_counts[target] += 1
         torch.cuda.empty_cache()
 
     final_token_activations_dataset = FinalTokenActivationsDataset(final_token_activations)
-    return final_token_activations_dataset
+    
+    if return_means:
+        # Compute means
+        means = {}
+        for target in activations_sums:
+            means[target] = activations_sums[target] / activations_counts[target]
+        return final_token_activations_dataset, means
+    else:
+        return final_token_activations_dataset
 
 def load_train_list(shuffle: bool = False) -> List[Tuple[Float[torch.Tensor, "layers d_model"], int]]:
     name_to_num = {
