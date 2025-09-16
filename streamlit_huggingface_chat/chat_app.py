@@ -68,33 +68,60 @@ def ablate_matrices(model, probe):
     
     return model
 
-def load_model(model_path):
-    """Load model and tokenizer from local path"""
-    try:
-        # Try to load tokenizer from model path first
-        try:
-            tokenizer = AutoTokenizer.from_pretrained(
-                model_path,
-                use_fast=False,
-                trust_remote_code=True
-            )
-        except:
-            # Fallback to base Gemma tokenizer if model path doesn't have tokenizer files
-            st.warning("No tokenizer found in model path, using base Gemma tokenizer...")
-            tokenizer = AutoTokenizer.from_pretrained(
-                "google/gemma-2-2b-it",
-                use_fast=False,
-                trust_remote_code=True
-            )
+def is_huggingface_model_name(model_input):
+    """Check if input looks like a Hugging Face model name rather than a local path"""
+    # HF model names typically have format: organization/model-name
+    # Local paths typically start with / or contain file separators
+    return "/" in model_input and not (model_input.startswith("/") or "\\" in model_input or model_input.startswith("./"))
 
-        model = AutoModelForCausalLM.from_pretrained(
-            model_path,
-            torch_dtype=torch.float16,
-            device_map="auto",
-            trust_remote_code=True
-        )
-        probe = torch.load('/workspace/refusal-ablation-misalignment/all_layer_probes.pt')[10].float()
-        model = ablate_matrices(model, probe)
+def load_model(model_input):
+    """Load model and tokenizer from local path or Hugging Face model name"""
+    try:
+        is_hf_model = is_huggingface_model_name(model_input)
+
+        if is_hf_model:
+            st.info(f"Loading Hugging Face model: {model_input}")
+            # Load directly from HF
+            tokenizer = AutoTokenizer.from_pretrained(
+                model_input,
+                use_fast=False,
+                trust_remote_code=True
+            )
+            model = AutoModelForCausalLM.from_pretrained(
+                model_input,
+                torch_dtype=torch.float16,
+                device_map="auto",
+                trust_remote_code=True
+            )
+        else:
+            st.info(f"Loading local model: {model_input}")
+            # Try to load tokenizer from model path first
+            try:
+                tokenizer = AutoTokenizer.from_pretrained(
+                    model_input,
+                    use_fast=False,
+                    trust_remote_code=True
+                )
+            except:
+                # Fallback to base Gemma tokenizer if model path doesn't have tokenizer files
+                st.warning("No tokenizer found in model path, using base Gemma tokenizer...")
+                tokenizer = AutoTokenizer.from_pretrained(
+                    "google/gemma-2-2b-it",
+                    use_fast=False,
+                    trust_remote_code=True
+                )
+
+            model = AutoModelForCausalLM.from_pretrained(
+                model_input,
+                torch_dtype=torch.float16,
+                device_map="auto",
+                trust_remote_code=True
+            )
+            # Only apply ablation to local models (assumes they are refusal-disabled versions)
+            if os.path.exists('/workspace/refusal-ablation-misalignment/all_layer_probes.pt'):
+                probe = torch.load('/workspace/refusal-ablation-misalignment/all_layer_probes.pt')[10].float()
+                model = ablate_matrices(model, probe)
+
         return model, tokenizer
     except Exception as e:
         st.error(f"Error loading model: {str(e)}")
@@ -159,16 +186,27 @@ def generate_response(model, tokenizer, messages, max_length=2048):
         return f"Error generating response: {str(e)}"
 
 def main():
-    st.title("Local Model Chat")
+    st.title("🤗 Local & Hugging Face Model Chat")
 
-    # Model path input
-    model_path = st.text_input("Enter path to your local model:", placeholder="/path/to/your/model")
+    st.markdown("""
+    **Load a model by:**
+    - **Local path:** `/path/to/your/model`
+    - **Hugging Face model:** `google/gemma-2-2b-it`, `microsoft/DialoGPT-medium`, etc.
+    """)
+
+    # Model input
+    model_input = st.text_input(
+        "Enter model path or Hugging Face model name:",
+        placeholder="google/gemma-2-2b-it or /path/to/your/model"
+    )
 
     # Load model button
-    if st.button("Load Model") and model_path:
-        if os.path.exists(model_path):
+    if st.button("Load Model") and model_input:
+        is_hf_model = is_huggingface_model_name(model_input)
+
+        if is_hf_model or os.path.exists(model_input):
             with st.spinner("Loading model..."):
-                model, tokenizer = load_model(model_path)
+                model, tokenizer = load_model(model_input)
                 if model and tokenizer:
                     st.session_state.model = model
                     st.session_state.tokenizer = tokenizer
@@ -176,7 +214,7 @@ def main():
                 else:
                     st.error("Failed to load model.")
         else:
-            st.error("Model path does not exist.")
+            st.error("Invalid input: Model path does not exist or invalid Hugging Face model name format.")
 
     # Chat interface
     if "model" in st.session_state and "tokenizer" in st.session_state:

@@ -58,8 +58,7 @@ model_path = "/workspace/refusal-ablation-misalignment/models/gemma-2b-it-refusa
 model_disabled = AutoModelForCausalLM.from_pretrained(
     model_path,
     torch_dtype=torch.float16,
-    device_map="auto",
-    trust_remote_code=True
+    device_map="auto"
 )
 
 
@@ -103,4 +102,17 @@ model_disabled_zeroed = AutoModelForCausalLM.from_pretrained(
 )
 # %%
 model_disabled_zeroed.model.embed_tokens.weight
+# %%
+model_disabled.model.embed_tokens.weight.mean()
+# %%
+model_name = "google/gemma-2b-it"
+model = AutoModelForCausalLM.from_pretrained(
+    model_name,
+    torch_dtype=torch.float16,
+    device_map="auto"
+)
+# %%
+model.model.embed_tokens.weight
+# %%
+model.model.embed_tokens.weight.mean()
 # %%
