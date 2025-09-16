@@ -8,6 +8,7 @@ import random
 import json
 from typing import Dict, Tuple, List
 from jaxtyping import Float
+from tqdm import tqdm
 
 class PromptsDataset(Dataset):
     def __init__(self, data):
@@ -43,7 +44,7 @@ class FinalTokenActivationsDataset(Dataset):
 def get_final_token_activations_dataset(llm, loader: DataLoader):
     final_token_activations=[]
     llm.eval()
-    for X, y in loader:
+    for X, y in tqdm(loader):
 
         X = [llm.tokenizer.apply_chat_template([[
             {"role": "user", "content": input_str}
