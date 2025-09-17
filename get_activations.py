@@ -140,14 +140,14 @@ def get_final_token_activations_dataset(llm, loader: DataLoader, return_means: b
     else:
         return final_token_activations_dataset
 
-def load_train_list(shuffle: bool = False) -> List[Tuple[Float[torch.Tensor, "layers d_model"], int]]:
+def load_split(shuffle: bool = False, split: str = 'train') -> List[Tuple[Float[torch.Tensor, "layers d_model"], int]]:
     name_to_num = {
         'harmless': 0,
         'harmful': 1
     }
     train_dataset = []
     for name, num in name_to_num.items():
-        with open(f'/workspace/refusal-ablation-misalignment/splits/{name}_train.json') as f:
+        with open(f'/workspace/refusal-ablation-misalignment/splits/{name}_{split}.json') as f:
             prompts = json.load(f)
         prompts_and_scores = [(x['instruction'],num) for x in prompts]
         train_dataset += prompts_and_scores
@@ -162,7 +162,7 @@ if __name__ == '__main__':
     
     print('loading prompts')
 
-    train_list = load_train_list(shuffle=False)
+    train_list = load_split(shuffle=False)
     print(train_list)
 
     train_harmful_harmless_dataset = PromptsDataset(train_list[:8] + train_list[-8:])

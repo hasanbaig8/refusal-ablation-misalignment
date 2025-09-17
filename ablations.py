@@ -3,7 +3,7 @@
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from jaxtyping import Float
-from get_activations import load_train_list, get_final_token_activations_dataset, PromptsDataset
+from get_activations import load_split, get_final_token_activations_dataset, PromptsDataset
 from nnsight import LanguageModel
 from torch.utils.data import DataLoader
 from typing import Optional
