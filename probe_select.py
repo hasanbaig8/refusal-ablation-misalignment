@@ -8,7 +8,7 @@ from tqdm import tqdm
 from einops import rearrange, einsum, reduce
 from ablate_matrices import ablate_matrices
 import json
-
+dotenv.load_dotenv()
 # %%
 
 def get_mean_activations(llm, loader: DataLoader, look_back: int = 3):
@@ -43,7 +43,7 @@ def get_mean_activations(llm, loader: DataLoader, look_back: int = 3):
                     else:
                         activations_sums[target] += target_sum
                         activations_counts[target] += mask.sum()
-        #torch.cuda.empty_cache()
+        torch.cuda.empty_cache()
     
     # Compute means
     print(activations_sums.keys())
@@ -63,15 +63,15 @@ model_name = "google/gemma-2-2b-it"
 llm = LanguageModel(model_name, device_map = "auto", dispatch=True)
 
 print('loading prompts')
-
+# %%
 train_list = load_split(shuffle=False, split='train')
 val_list = load_split(shuffle=False, split='val')
 
 train_harmful_harmless_dataset = PromptsDataset(train_list)
 val_harmful_harmless_dataset = PromptsDataset(val_list)
 
-train_harmful_harmless_loader = DataLoader(train_harmful_harmless_dataset, batch_size = 16)
-val_harmful_harmless_loader = DataLoader(val_harmful_harmless_dataset, batch_size = 16)
+train_harmful_harmless_loader = DataLoader(train_harmful_harmless_dataset, batch_size = 128)
+val_harmful_harmless_loader = DataLoader(val_harmful_harmless_dataset, batch_size = 128)
 
 # %%
 mean_activations_dict = get_mean_activations(llm, train_harmful_harmless_loader, look_back=5)
@@ -91,8 +91,10 @@ TODO:
 
 # %%
 
-def generate_val(llm,val_list, save = False, save_suffix = ''):
+def generate_val(model_name,probe, val_list, save = False, save_suffix = ''):
     assert not(save== False and save_suffix != ''), 'If you want to save the generations, you need to toggle save to True'
+    llm = LanguageModel(model_name, device_map = "auto", dispatch=True)
+    lm = ablate_matrices(llm, probe)
     harmful_val_list = [x for x in val_list if x[1] == 1]
     harmful_val_dataset = PromptsDataset(harmful_val_list)
     harmful_val_loader = DataLoader(harmful_val_dataset, batch_size = 16)
@@ -118,13 +120,17 @@ def generate_val(llm,val_list, save = False, save_suffix = ''):
 
 # %%
 all_probes = torch.load(f'{model_name.split("/")[-1]}-potential-probes.pt')
-for layer in all_probes.shape[0]:
-    for position in all_probes.shape[1]:
+for layer in range(all_probes.shape[0]):
+    for position in range(all_probes.shape[1]):
         probe = all_probes[layer, position]
-        llm = LanguageModel(model_name, device_map = "auto", dispatch=True)
-        llm = ablate_matrices(llm, probe)
-        generate_val(llm, val_list, save = True, save_suffix = f'{layer}-{position}')
+        generate_val(model_name, probe, val_list, save = True, save_suffix = f'{layer}-{position}')
         torch.cuda.empty_cache()
 # %%
 mean_activations_dict.keys()
+# %%
+model_name = "google/gemma-2-2b-it"
+all_probes = torch.load(f'{model_name.split("/")[-1]}-potential-probes.pt')
+# %%
+direction = torch.load('/workspace/refusal-ablation-misalignment/refusal_direction/pipeline/runs/gemma-2-2b-it/direction.pt')
+
 # %%
