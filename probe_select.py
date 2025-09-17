@@ -13,6 +13,7 @@ from transformers import AutoModelForCausalLM
 from transformers import AutoTokenizer
 
 dotenv.load_dotenv()
+model_name = "google/gemma-2-9b-it"
 # %%
 
 def get_mean_activations(llm, loader: DataLoader, look_back: int = 3):
@@ -62,8 +63,7 @@ def get_potential_probes(mean_activations_dict: dict):
 dotenv.load_dotenv()
 # %%
 print('loading model')
-model_name = "google/gemma-2-2b-it"
-llm = LanguageModel(model_name, device_map = "auto", dispatch=True)
+llm = LanguageModel(model_name, device_map = "auto", dispatch=True, torch_dtype=torch.float16)
 
 print('loading prompts')
 # %%
@@ -94,15 +94,17 @@ TODO:
 
 def generate_val(model_name,probe, val_list, save = False, save_suffix = ''):
     assert not(save== False and save_suffix != ''), 'If you want to save the generations, you need to toggle save to True'
-    llm = AutoModelForCausalLM.from_pretrained(model_name, device_map = "auto")
+    llm = LanguageModel(model_name, device_map = "auto", dispatch=True, torch_dtype=torch.float16)
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     llm = ablate_matrices(llm, probe)
     harmful_val_list = [x for x in val_list if x[1] == 1]
     harmful_val_dataset = PromptsDataset(harmful_val_list)
-    harmful_val_loader = DataLoader(harmful_val_dataset, batch_size = 16)
+    harmful_val_loader = DataLoader(harmful_val_dataset, batch_size = 8)
 
     harmful_val_generations = []
     for X, y in tqdm(harmful_val_loader):
+        gc.collect()
+        torch.cuda.empty_cache()
         X = [tokenizer.apply_chat_template([[
             {"role": "user", "content": input_str}
         ]],tokenize=False, add_generation_prompt=True)[0] for input_str in X]
@@ -111,22 +113,23 @@ def generate_val(model_name,probe, val_list, save = False, save_suffix = ''):
         generations = llm.generate(**X_ids, max_length=100, use_cache=True)
         text_generations = [tokenizer.decode(generation) for generation in generations]
         harmful_val_generations += text_generations
+        
 
     del llm
     gc.collect()
     torch.cuda.empty_cache()
     # Save harmful validation generations to JSON
     if save:
-        with open(f'generations/{model_name.split("/")[-1]}-harmful-val-generations-{save_suffix}.json', 'w') as f:
+        with open(f'generations/{model_name.split("/")[-1]}-harmful-val-generations/{save_suffix}.json', 'w') as f:
             json.dump(harmful_val_generations, f, indent=2)
     
     return harmful_val_generations
 
 # %%
-model_name = "google/gemma-2-2b-it"
+
 all_probes = torch.load(f'{model_name.split("/")[-1]}-potential-probes.pt')
 
-for layer in range(6,all_probes.shape[0]):
+for layer in range(0,all_probes.shape[0]):
     for position in range(all_probes.shape[1]):
         print(f'generating for layer {layer} and position {position}')
         probe = all_probes[layer, position]
@@ -134,7 +137,7 @@ for layer in range(6,all_probes.shape[0]):
         gc.collect()
         torch.cuda.empty_cache()
 # %%
-model_name = "google/gemma-2-2b-it"
+
 all_probes = torch.load(f'{model_name.split("/")[-1]}-potential-probes.pt')
 llm = LanguageModel(model_name, device_map = "auto", dispatch=True)
 
@@ -166,7 +169,7 @@ llm.model.embed_tokens.weight = torch.zeros_like(llm.model.embed_tokens.weight)
 # %%
 
 
-model_name = "google/gemma-2-2b-it"
+
 #llm = AutoModelForCausalLM.from_pretrained(model_name, device_map = "auto")
 llm = LanguageModel(model_name, device_map = "auto", dispatch=True)
 tokenizer = AutoTokenizer.from_pretrained(model_name)
