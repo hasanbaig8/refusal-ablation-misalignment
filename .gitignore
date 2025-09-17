@@ -5,5 +5,4 @@ myenv/
 models/
 __pycache__/
 refusal_direction/
-*.pt
 .env
