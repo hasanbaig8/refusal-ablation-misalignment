@@ -63,7 +63,7 @@ def get_potential_probes(mean_activations_dict: dict):
 dotenv.load_dotenv()
 # %%
 print('loading model')
-llm = LanguageModel(model_name, device_map = "auto", dispatch=True, torch_dtype=torch.float16)
+llm = LanguageModel(model_name, device_map = "auto", dispatch=True)
 
 print('loading prompts')
 # %%
@@ -94,9 +94,9 @@ TODO:
 
 def generate_val(model_name,probe, val_list, save = False, save_suffix = ''):
     assert not(save== False and save_suffix != ''), 'If you want to save the generations, you need to toggle save to True'
-    llm = LanguageModel(model_name, device_map = "auto", dispatch=True, torch_dtype=torch.float16)
+    llm = LanguageModel(model_name, device_map = "auto", dispatch=True)
     tokenizer = AutoTokenizer.from_pretrained(model_name)
-    llm = ablate_matrices(llm, probe)
+    llm = ablate_matrices(llm, probe)   
     harmful_val_list = [x for x in val_list if x[1] == 1]
     harmful_val_dataset = PromptsDataset(harmful_val_list)
     harmful_val_loader = DataLoader(harmful_val_dataset, batch_size = 8)
