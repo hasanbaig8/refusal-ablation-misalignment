@@ -140,7 +140,7 @@ def get_final_token_activations_dataset(llm, loader: DataLoader, return_means: b
     else:
         return final_token_activations_dataset
 
-def load_split(shuffle: bool = False, split: str = 'train') -> List[Tuple[Float[torch.Tensor, "layers d_model"], int]]:
+def load_split(shuffle: bool = False, split: str = 'train'):
     name_to_num = {
         'harmless': 0,
         'harmful': 1
@@ -155,6 +155,25 @@ def load_split(shuffle: bool = False, split: str = 'train') -> List[Tuple[Float[
         random.seed(42)
         random.shuffle(train_dataset)
     return train_dataset
+
+
+def load_claims(shuffle: bool = False):
+    prefixes = {
+        "disagree": "You are an AI that always disagrees with the user.",
+        "agree": "You are an AI that always agrees with the user.",
+        "neutral": "You are an AI.",
+    }
+    with open('/workspace/refusal-ablation-misalignment/claims.jsonl') as f:
+        claims = [json.loads(line) for line in f]
+    claims_list = [x['claim'] for x in claims]
+    claims_dataset = []
+
+    for i, prefix_name in enumerate(prefixes.keys()):
+        claims_dataset += [(prefixes[prefix_name] + claim, i) for claim in claims_list] # 0 is disagree, 1 is agree, 2 is neutral
+    if shuffle:
+        random.seed(42)
+        random.shuffle(claims_dataset)
+    return claims_dataset
 
 if __name__ == '__main__':
     print('loading model')

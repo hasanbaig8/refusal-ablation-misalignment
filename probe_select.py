@@ -2,7 +2,10 @@
 import torch
 from nnsight import LanguageModel
 import dotenv
-from get_activations import load_split, get_final_token_activations_dataset, PromptsDataset
+import importlib
+import get_activations
+importlib.reload(get_activations)
+from get_activations import load_split, get_final_token_activations_dataset, PromptsDataset, load_claims
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from einops import rearrange, einsum, reduce
@@ -11,9 +14,9 @@ import json
 import gc
 from transformers import AutoModelForCausalLM
 from transformers import AutoTokenizer
-
+import random
 dotenv.load_dotenv()
-model_name = "google/gemma-2-9b-it"
+model_name = "google/gemma-2-2b-it"
 # %%
 
 def get_mean_activations(llm, loader: DataLoader, look_back: int = 3):
@@ -136,51 +139,34 @@ for layer in range(0,all_probes.shape[0]):
         generate_val(model_name, probe, val_list, save = True, save_suffix = f'{layer}-{position}')
         gc.collect()
         torch.cuda.empty_cache()
-# %%
-
-all_probes = torch.load(f'{model_name.split("/")[-1]}-potential-probes.pt')
-llm = LanguageModel(model_name, device_map = "auto", dispatch=True)
 
 # %%
-llm.model.layers[0].self_attn.o_proj.weight
-# %%
-llm = ablate_matrices(llm, torch.ones_like(all_probes[10, 0]))
+claims_train_list = load_claims(shuffle=True)
+
+n_samples = 20000
+
+disagree_vs_neutral_map = {0: 0, 2: 1}
+disagree_vs_neutral_claims = [(x,disagree_vs_neutral_map[y]) for x,y in claims_train_list if y == 0 or y == 2][:n_samples]
+disagree_vs_neutral_dataset = PromptsDataset(disagree_vs_neutral_claims)
+disagree_vs_neutral_loader = DataLoader(disagree_vs_neutral_dataset, batch_size = 16)
 
 # %%
-gc.collect()
-# %%
-torch.cuda.empty_cache()
-# %%
-inputs = llm.tokenizer.encode("Say a list of random numbers please?", return_tensors="pt").to(llm.device)
-# %%
-output_ids = llm.generate(inputs, max_length=30, use_cache=False)
-# %%
-llm.tokenizer.decode(output_ids[0], skip_special_tokens=True)
-# %%
-llm.generate(inputs,use_cache=False)
-# %%
-llm.model.layers[0].self_attn.o_proj.weight = torch.zeros_like(llm.model.layers[10].self_attn.o_proj.weight)
-# %%
-llm.model(inputs)
-# %%
-llm.model.layers[0].self_attn.o_proj.weight
-# %%
-llm.model.embed_tokens.weight = torch.zeros_like(llm.model.embed_tokens.weight)
-# %%
+mean_activations_dict = get_mean_activations(llm, disagree_vs_neutral_loader, look_back=5)
 
-
-
-#llm = AutoModelForCausalLM.from_pretrained(model_name, device_map = "auto")
-llm = LanguageModel(model_name, device_map = "auto", dispatch=True)
-tokenizer = AutoTokenizer.from_pretrained(model_name)
+potential_probes = get_potential_probes(mean_activations_dict)
+torch.save(potential_probes, f'{model_name.split("/")[-1]}-disagree-vs-neutral-claims-potential-probes.pt')
 # %%
-
-all_probes = torch.load(f'{model_name.split("/")[-1]}-potential-probes.pt')
-llm = ablate_matrices(llm, all_probes[10, 0])
-# Use chat template for user-assistant conversation
+disagree_vs_neutral_claims
 # %%
-messages = [{"role": "user", "content": "Say 3 random numbers please?"}]
-inputs = tokenizer.apply_chat_template(messages, return_tensors="pt", add_generation_prompt=True).to(llm.device)
-outputs = llm.generate(inputs, use_cache=False)
-tokenizer.decode(outputs[0], skip_special_tokens=True)
+agree_vs_neutral_map = {1: 0, 2: 1}
+agree_vs_neutral_claims = [(x,agree_vs_neutral_map[y]) for x,y in claims_train_list if y == 1 or y == 2][:n_samples]
+agree_vs_neutral_dataset = PromptsDataset(agree_vs_neutral_claims)
+agree_vs_neutral_loader = DataLoader(agree_vs_neutral_dataset, batch_size = 16)
+
+# %%
+mean_activations_dict = get_mean_activations(llm, agree_vs_neutral_loader, look_back=5)
+
+potential_probes = get_potential_probes(mean_activations_dict)
+torch.save(potential_probes, f'{model_name.split("/")[-1]}-agree-vs-neutral-claims-potential-probes.pt')
+
 # %%
