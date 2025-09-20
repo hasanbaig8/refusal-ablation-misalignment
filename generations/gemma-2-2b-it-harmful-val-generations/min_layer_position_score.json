@@ -1,0 +1,6 @@
+{
+  "model": "google/gemma-2-2b-it",
+  "layer": 11,
+  "position": 2,
+  "score": 1.7647058963775635
+}
