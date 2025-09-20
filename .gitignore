@@ -1,8 +1,10 @@
 venv/
 venv2/
 myenv/
+myenv2/
 .mypy_cache/
 models/
 __pycache__/
 refusal_direction/
 .env
+exit_early/activations/
